@@ -1,0 +1,177 @@
+dependencies:
+pyreadline?
+
+requirements
+============
+pass list of files to script
+fail with no args
+process single file at a time
+what type of files are we processing (videos, other) -- choose once
+display total number of files (args) to process
+allow interruption of processing to finish what we've done so far
+display file name and extension, then:
+    prompt for author(s) tag
+    display file name (without extension or tag) and prompt for changes
+    sanitize filename
+    prompt for where it's going (live/3d/animated)
+    prompt for finalize confirmation
+if there were any errors, prompt to retry the error files (indefinitely)
+
+
+UX/UI
+=====
+
+===================
+Processing XX files
+===================
+
+Job 1/XX
+Filename: some_file_name.mp4
+
+Author tag (optional): author
+New name (optional): new name
+
+Proposed filename: [author]_new_name.mp4
+Accept name [Y/n]?:
+
+Categories:
+0: Live
+1: 3D
+2: Animated
+
+Category #: 0
+
+~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+Job 2/XX
+Filename: some_other_file_name.mp4
+
+...
+
+~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+Processed: XX
+Dropped: 0
+
+===============
+Moving XX files
+===============
+
+[author]_file_0.mp4: moved
+[author]_file_1.mp4: moved
+[author]_file_2.mp4: destination already exists
+[author]_file_3.mp4: error
+    File not found (or whatever)
+[author]_file_4.mp4: file in use
+
+Moved: 2/4
+Duplicates: 1
+Files in use: 1
+Other errors: 1
+
+<!> There were some errors during processing, attempting to resolve them now...
+
+Some files already exist at their destination.
+Delete the source files (d), overwrite destination (o), or ignore (i)?
+[D/o/i]: 
+
+Some files appeared to be in use when attempting to move them:
+
+original_file_name.mp4 -> [author]_file_4.mp4
+
+Retry move? [Y/n]: 
+
+[author]_file_4.mp4: moved
+
+The following files experienced other errors during their move:
+
+some_file_name.mp4 -> [author]_file_3.mp4
+>>> <Exception message here>
+
+
+pseudo code
+===========
+if no args are present, exit with error
+load env variables; exit with error if any are missing
+choose what type of files we're handling (video/other), make relevant factory
+
+() convert args into MoveObjects:
+create empty obj list
+get number of arguments to be processed (total jobs)
+create iteration counter at 0
+for arg in args
+    try:
+        report job number out of total jobs
+        create new MoveObject with arg using MoveObjectFactory
+        validate file (arg 1): exists, is a file
+        print filename + extension
+        prompt for author tag
+        prompt for new file name
+        sanitize the rest of the filename
+        prompt for confirmation of finalization
+        create new path object with new file name
+        add obj to processing list
+    except ValueError
+        continue
+    except KeyboardInterrupt
+        break
+    else
+        increment iteration counter
+return obj list
+
+
+() attempt to move objects:
+
+
+
+process move attempt results:
+
+
+
+
+
+possible errors: duplicate, permission error (file open)
+for obj in processing list copy
+    try:
+        obj.move()
+    except OSError (permissions)
+        add to error list
+    .
+
+
+objects
+=======
+
+MoveObjectSuperFactory
+    + makeNewFactory(factoryEnum) -> MoveObjectFactory
+    
+    MoveObjectFactory
+        + makeObj(path: str) -> MoveObject
+
+        VideoFactory
+            + makeObj(path: str) -> Video
+
+        OtherFactory
+
+MoveObject
+    - source: Path
+    - destination: Path
+    - sanitizeFilename()
+    - build()
+    + move()
+
+    Video
+        + __init__(pathString)
+
+    Other
+
+MoveStatus(Enum)
+    SUCCESS
+    DESTINATION_EXISTS
+    FILE_OPEN
+    ERROR
+
+MoveReturn
+    + file: MoveObject
+    + status: MoveStatus
+    + exception: exception

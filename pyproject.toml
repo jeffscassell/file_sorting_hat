@@ -1,0 +1,11 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "file_sorting_hat"
+version = "0.0.1"
+dependencies = [
+    "dotenv",
+    "fs_helpers",
+]
