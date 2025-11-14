@@ -7,11 +7,18 @@ variables.
 
 from sys import argv
 
+from fs_helpers import progressBar
+
 from .processing_factories import (
     MoveObjectSuperFactory,
     MoveObjectFactory
 )
-from .processing_objects import MoveObject, MoveResult, MoveStatus
+from .processing_objects import (
+    MoveObject,
+    MoveResult,
+    MoveStatus,
+    recoverableErrors
+)
 from .extensions import validateSession
 
 
@@ -24,20 +31,20 @@ def printTitle(title: str) -> None:
     print()
 
 
-def createObjects() -> list[MoveObject]:
+def createObjects(args: list[str]) -> list[MoveObject]:
     factory: MoveObjectFactory = \
         MoveObjectSuperFactory.chooseFactory()
 
-    totalJobs = len(argv[1:])
-    jobNumber = 0
+    totalJobs = len(args)
+    currentJob = 0
     jobList: list[MoveObject] = []
     
-    printTitle(f"Processing {totalJobs} files")
+    print("Note: stop in-taking files and begin processing with CTRL+C")
+    print()
     
-    for arg in argv[1:]:
+    for arg in args:
         try:
-            print(f"Job {jobNumber + 1}/{totalJobs}")
-            print()
+            print(f"Job {currentJob + 1}/{totalJobs}")
             file = factory.makeMoveObject(arg)
             jobList.append(file)
         except (ValueError, TypeError) as e:
@@ -51,13 +58,13 @@ def createObjects() -> list[MoveObject]:
             print()
             break
         else:
-            jobNumber += 1
+            currentJob += 1
         finally:
             print("~ " * 10)
             print()
     
-    print(f"Processed: {jobNumber}/{totalJobs}")
-    print(f"Dropped: {totalJobs - jobNumber}")
+    print(f"Processed: {currentJob}/{totalJobs}")
+    print(f"Dropped: {totalJobs - currentJob}")
     print()
     return jobList
 
@@ -65,92 +72,151 @@ def createObjects() -> list[MoveObject]:
 def moveFiles(jobList: list[MoveObject]) -> list[MoveResult]:
     results: list[MoveResult] = []
     
-    for job in jobList:
+    for job in progressBar(jobList):
         try:
             job.move()
             result = MoveResult(job, MoveStatus.SUCCESS)
             results.append(result)
         except FileExistsError as e:
-            result = MoveResult(job, MoveStatus.DESTINATION_EXISTS, e)
+            result = MoveResult(job, MoveStatus.DUPLICATE, e)
             results.append(result)
         except OSError as e:
             result = MoveResult(job, MoveStatus.FILE_IN_USE, e)
             results.append(result)
         except KeyboardInterrupt:
             break
-        except Exception as e:
+        except BaseException as e:
             result = MoveResult(job, MoveStatus.OTHER_ERROR, e)
             results.append(result)
-        
+    
+    print()
     return results
 
 
 def reportResults(results: list[MoveResult]) -> None:
     for result in results:
+        # Don't display items that have already been successfully processed.
+        if result.status == MoveStatus.PROCESSED:
+            continue
+        
         print(result)
+        
+        # Mark acceptably processed items as such.
+        if result.status not in recoverableErrors:
+            result.status = MoveStatus.PROCESSED
+
+    print()
 
 
-def processResults(results: list[MoveResult]) -> list[MoveResult]:
-    ...
+def recoverableErrorsExist(results: list[MoveResult]) -> bool:
+    for result in results:
+        if result.status in recoverableErrors:
+            return True
+    return False
+
+
+def getPolicies() -> dict[str, str]:
+    policies = {"built": "yes"}  # Only assign a policy if we need to do work.
+    
+    
+    # Get `duplicates` policy from user.
+    print("In case some files already exist at their destination:")
+    print("Delete the source files (d), overwrite destination (o), "
+        "or ignore (i)?")
+    
+    choice = ""
+    while choice not in "d o i".split():
+        choice = input("[D/o/i]: ").lower() or "d"
+    print()
+    
+    if choice != "i":
+        policies["duplicates"] = choice
+    
+    
+    # Get `inUse` policy from user.
+    print("In case some files appear to be in use "
+        "when attempting to move them:")
+    
+    choice = ""
+    while choice not in ("y", "n"):
+        choice = input("Retry move? [Y/n]: ").lower() or "y"
+    print()
+    
+    if choice != "n":
+        policies["inUse"] = choice
+
+
+    return policies
+
+
+def fixErrors(
+    results: list[MoveResult],
+    policies: dict[str, str]
+) -> list[MoveResult]:
+    
+    # Return early if we don't need to do any work.
+    # The policy is given 1 pair at instantiation, which means if it still
+    # only has 1, it's empty.
+    if len(policies) == 1:
+        print("The selected policies indicate that no fixes are needed.")
+        print()
+        return results
+
+
+    for result in progressBar(results):
+        try:
+            if result.status == MoveStatus.DUPLICATE:
+
+                if policies.get("duplicates") == "d":
+                    result.delete()
+
+                if policies.get("duplicates") == "o":
+                    result.overwrite()
+
+            if result.status == MoveStatus.FILE_IN_USE:
+
+                if policies.get("inUse") == "y":
+                    result.move()
+
+        except FileExistsError as e:
+            result.status = MoveStatus.DUPLICATE
+            result.exception = e
+        except OSError as e:
+            result.status = MoveStatus.FILE_IN_USE
+            result.exception = e
+        except BaseException as e:
+            result.status = MoveStatus.OTHER_ERROR
+            result.exception = e
+    
+    print()
+    return results
 
 
 def main() -> None:
     validateSession()
     
-    jobList = createObjects()
+    args = argv[1:]
+    printTitle(f"Processing {len(args)} files")
+    jobList = createObjects(args)
+    
+    printTitle(f"Moving {len(jobList)} files")
     moveResults = moveFiles(jobList)
     reportResults(moveResults)
     
-    errorList: list[MoveObject] = []
-    errors = len(errorList)
-    duplicateList: list[MoveObject] = []
-    duplicates = len(duplicateList)
-    leave: bool = False
-    
-    while len(jobList) > 0 and not leave:
-        startingJobs = len(jobList)
-        print(f"Jobs to process: {startingJobs}")
-        print(f"===============")
+    fix = "y"
+    policies = {}
+    while recoverableErrorsExist(moveResults) and fix != "n":
+        fix = input("<!> There were some recoverable errors during "
+            "processing, attempt to resolve them now? [Y/n]: ").lower() or "y"
         
-        # We'll be modifying the list, so work on a copy, not the original.
-        for file in jobList.copy():
-            try:
-                print(f"{file.destination.name}: ", end="")
-                file.move()
-                print("moved")
-                jobList.remove(file)
-            except FileExistsError:
-                print("duplicate (removing)")
-                duplicateList.append(file)
-                jobList.remove(file)
-            except KeyboardInterrupt:
-                print()
-                leave = True
-                break
-            except Exception as e:
-                print("error (removing)")
-                print(f"\t{e}")
-                errorList.append(file)
-                jobList.remove(file)
-        print()
-        
-        remainingJobs = len(jobList)
-        duplicates = len(duplicateList)
-        errors = len(errorList)
-        print(f"Processed: {startingJobs - remainingJobs}/{startingJobs}")
-        if duplicates: print(f"Duplicates: {duplicates}")
-        if errors: print(f"Errors: {errors}")
-        print()
-        
-        if remainingJobs:
-            print(f"There are {remainingJobs} jobs left to process.")
-            choice = None
-            while choice != "y":
-                choice = input("Process remaining jobs? [Y/n]:").lower() or "y"
-                
-                if choice == "n":
-                    leave = True
+        if fix == "y":
             print()
-    
-    while duplicates:
-        ...
+            
+            if not policies:
+                policies = getPolicies()
+            
+            printTitle("Fixing errors")
+            moveResults = fixErrors(moveResults, policies)
+            reportResults(moveResults)
+        
+    printTitle("Processing complete!")

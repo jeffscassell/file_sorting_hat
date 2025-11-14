@@ -8,23 +8,23 @@ from sys import argv
 __errorExists = None
 
 
-def __setError(message: str) -> None:
+def setError(message: str) -> None:
     global __errorExists
     __errorExists = 1
     print(message)
 
 
-def __validatePath(path: Path) -> None:
+def validatePath(path: Path) -> None:
     if not path.exists():
-        __setError(f"{path} does not exist.")
+        setError(f"{path} does not exist.")
     
     if not path.is_dir():
-        __setError(f"{path} is not a directory")
+        setError(f"{path} is not a directory")
 
 
 def validateSession() -> None:
     if len(argv) == 1:
-        __setError("This script requires file arguments to function.")
+        setError("This script requires file arguments to function.")
 
     Config.load()
     Config.validate()
@@ -60,5 +60,5 @@ class Config:
     def validate(cls) -> None:
         assert cls.__loaded
         
-        __validatePath(cls.VIDEO_PATH)
-        __validatePath(cls.OTHER_PATH)
+        validatePath(cls.VIDEO_PATH)
+        validatePath(cls.OTHER_PATH)
