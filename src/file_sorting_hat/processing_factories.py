@@ -11,25 +11,30 @@ from .processing_objects import (
     Video,
     Other,
 )
+from .extensions import Config
 
 
 
 class MoveObjectFactory(ABC):
+    config: Config
+    
+    def __init__(self, config: Config):
+        self.config = config
     
     @abstractmethod
-    def makeMoveObject(self, path: str) -> MoveObject: ...
+    def makeMoveObject(self, file: str) -> MoveObject: ...
 
 
 class VideoFactory(MoveObjectFactory):
     
-    def makeMoveObject(self, path: str) -> Video:
-        return Video(path)
+    def makeMoveObject(self, file: str) -> Video:
+        return Video(file, self.config.VIDEO_PATH)
 
 
 class OtherFactory(MoveObjectFactory):
     
-    def makeMoveObject(self, path: str) -> Other:
-        return Other(path)
+    def makeMoveObject(self, file: str) -> Other:
+        return Other(file, self.config.OTHER_PATH)
 
 
 factoryOptions = {
@@ -38,9 +43,13 @@ factoryOptions = {
 }
 
 class MoveObjectSuperFactory:
+    config: Config
     
-    @staticmethod
-    def chooseFactory() -> MoveObjectFactory:
+    
+    def __init__(self, config: Config):
+        self.config = config
+    
+    def chooseFactory(self) -> MoveObjectFactory:
         
         print("File type to be processed:")
         for key, value in factoryOptions.items():
@@ -55,4 +64,4 @@ class MoveObjectSuperFactory:
                 choice = None
         print()
         
-        return factoryOptions[choice][1]()
+        return factoryOptions[choice][1](self.config)

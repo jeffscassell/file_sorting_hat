@@ -8,39 +8,43 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
+import shutil
 
 from fs_helpers import cleanFilename, confirmFilename, formatFileSize
-
-from .extensions import Config
 
 
 
 class MoveObject(ABC):
     source: Path
     destination: Path
-    
-    
-    def __init__(self, path: str):
-        self.source = Path(path)
+    saveLocation: Path
+
+
+    def __init__(self, file: str, location: str | Path):
+        self.source = Path(file)
+        self.saveLocation = Path(location)
         self._validatePath(self.source)
         self._build()
-    
+
     def _validatePath(self, path: Path):
         if not path.exists():
             raise ValueError(f"Path does not exist: {path}")
-    
+
     def _sanitizeFilename(self, filename: str) -> str:
         return cleanFilename(filename)
-    
+
     @abstractmethod
     def _build(self): ...
-    
+
     @abstractmethod
-    def move(self): ...
-    
+    def move(self): 
+        """ Move object from source to destination. If destination exists,
+        raises OSError. """
+
     @abstractmethod
-    def delete(self): ...
-    
+    def delete(self):
+        """ Delete source file. """
+
     @abstractmethod
     def overwrite(self): ...
 
@@ -55,7 +59,7 @@ class Video(MoveObject):
 
     def _validatePath(self, path: Path):
         super()._validatePath(path)
-        
+
         if not path.is_file():
             raise TypeError(f"Path is not a file: {path}")
 
@@ -66,11 +70,11 @@ class Video(MoveObject):
         ext = self.source.suffix
         print(f"Current file: {oldName}{ext}")
         print()
-        
+
         tag = input("Author tag (optional): ") or None
         newName = input("Update name (optional): ") or newName
         print()
-        
+
         if tag:
             newName = f"[{tag}] {newName}"
 
@@ -93,46 +97,47 @@ class Video(MoveObject):
         print()
 
         subdirectory = videoOptions[category][1]
-        self.destination = Config.VIDEO_PATH / subdirectory / finalName
+        self.destination = self.saveLocation / subdirectory / finalName
 
 
     def move(self) -> None:
-        try:
-            with open(self.destination, "xb") as outfile:
-                outfile.write(self.source.read_bytes())
-        except FileExistsError:
-            raise
-        else:
-            self.source.unlink()
-    
-    
+        if self.destination.exists():
+            raise FileExistsError
+
+        shutil.move(self.source, self.destination)
+
+
     def delete(self) -> None:
         if self.source.exists():
             self.source.unlink()
-    
-    
+
+
     def overwrite(self) -> None:
-        if self.source.exists() and self.destination.exists():
-            self.destination.unlink()
-            with open(self.source, "rb") as infile:
-                with open(self.destination, "wb") as outfile:
-                    outfile.write(infile.read())
+        if self.source.exists()\
+            and self.destination.exists()\
+            and self.source != self.destination\
+        :
+            self.source.replace(self.destination)
+            # self.destination.unlink()
+            # with open(self.destination, "wb") as outfile:
+            #     outfile.write(self.source.read_bytes())
+            # self.source.unlink()
 
 
 class Other(MoveObject):
-    
+
     def _build(self) -> None:
         ...
-    
-    
+
+
     def move(self) -> None:
         ...
-    
-    
+
+
     def delete(self) -> None:
         ...
-    
-    
+
+
     def overwrite(self) -> None:
         ...
 
@@ -140,16 +145,22 @@ class Other(MoveObject):
 class MoveStatus(Enum):
     SUCCESS = "moved"
     DUPLICATE = "destination exists"
-    FILE_IN_USE = "file in use"
+    DELETE_FAILURE = "can't delete source"
     OTHER_ERROR = "error"
-    DELETED = "deleted"
+    DELETED = "deleted source"
     OVERWRITTEN = "overwritten"
     PROCESSED = "processed"
 
 
 recoverableErrors = (
     MoveStatus.DUPLICATE,
-    MoveStatus.FILE_IN_USE,
+    MoveStatus.DELETE_FAILURE,
+)
+
+goodStates = (
+    MoveStatus.SUCCESS,
+    MoveStatus.DELETED,
+    MoveStatus.OVERWRITTEN,
 )
 
 
@@ -158,10 +169,21 @@ class MoveResult:
     file: MoveObject
     status: MoveStatus
     exception: BaseException | None = None
-    
+
     def __str__(self) -> str:
-        string = f"{self.file.destination.name}: {self.status.value}"
-        
+        maxLength = 80
+        prefix = self.file.destination.name
+        suffix = self.status.value
+
+        if self.status in goodStates:
+            fillChar = "."
+        else:
+            fillChar = "_"
+
+        filledLength = len(prefix) + len(suffix)
+        emptyLength = maxLength - filledLength
+        string = prefix + fillChar * emptyLength + suffix
+
         match self.status:
             case MoveStatus.DUPLICATE:
                 source = formatFileSize(file=self.file.source)
@@ -169,22 +191,21 @@ class MoveResult:
                 string += f"\n\tsource: {source}, dest: {destination}"
             case MoveStatus.OTHER_ERROR:
                 string += f"\n\t{self.exception}"
+
         return string
-    
+
     def delete(self) -> None:
         self.file.delete()
-        self.status = MoveStatus.DELETED
-        self.clearException()
-    
+        self.__clear(MoveStatus.DELETED)
+
     def overwrite(self) -> None:
         self.file.overwrite()
-        self.status = MoveStatus.OVERWRITTEN
-        self.clearException()
-    
+        self.__clear(MoveStatus.OVERWRITTEN)
+
     def move(self) -> None:
         self.file.move()
-        self.status = MoveStatus.SUCCESS
-        self.clearException()
-        
-    def clearException(self) -> None:
+        self.__clear(MoveStatus.SUCCESS)
+
+    def __clear(self, status: MoveStatus) -> None:
+        self.status = status
         self.exception = None
