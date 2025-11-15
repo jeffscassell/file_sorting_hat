@@ -1,12 +1,12 @@
 """
-processing_factories.py
+move_factories.py
 
-Contains the various factories necessary for creating file processing objects.
+Contains the various factories necessary for creating MoveObjects.
 """
 
 from abc import ABC, abstractmethod
 
-from .processing_objects import (
+from .move_objects import (
     MoveObject,
     Video,
     Other,
@@ -28,13 +28,13 @@ class MoveObjectFactory(ABC):
 class VideoFactory(MoveObjectFactory):
     
     def makeMoveObject(self, file: str) -> Video:
-        return Video(file, self.config.VIDEO_PATH)
+        return Video(file, self.config.paths["VIDEO_PATH"])
 
 
 class OtherFactory(MoveObjectFactory):
     
     def makeMoveObject(self, file: str) -> Other:
-        return Other(file, self.config.OTHER_PATH)
+        return Other(file, self.config.paths["OTHER_PATH"])
 
 
 factoryOptions = {
@@ -48,6 +48,12 @@ class MoveObjectSuperFactory:
     
     def __init__(self, config: Config):
         self.config = config
+    
+    def __createFactory(self, choice: int) -> MoveObjectFactory:
+        if choice not in factoryOptions.keys():
+            raise ValueError("Not a valid subdirectory")
+        
+        return factoryOptions[choice][1](self.config)
     
     def chooseFactory(self) -> MoveObjectFactory:
         
@@ -64,4 +70,4 @@ class MoveObjectSuperFactory:
                 choice = None
         print()
         
-        return factoryOptions[choice][1](self.config)
+        return self.__createFactory(choice)

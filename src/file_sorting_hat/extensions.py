@@ -1,3 +1,9 @@
+"""
+extensions.py
+
+Validation and config.
+"""
+
 from dotenv import load_dotenv
 from os import getenv
 from pathlib import Path
@@ -23,10 +29,18 @@ def validatePath(path: Path) -> None:
 
 
 class Config:
-    VIDEO_PATH: Path
-    OTHER_PATH: Path
+    settings: dict[str, str]
+    paths: dict[str, Path]
     __loaded = False
 
+
+    @classmethod
+    def setSetting(cls, name: str, setting: str) -> None:
+        cls.settings[name] = setting
+    
+    @classmethod
+    def setPath(cls, name: str, path: Path) -> None:
+        cls.paths[name] = path
 
     @classmethod
     def load(cls) -> None:
@@ -39,18 +53,15 @@ class Config:
         videoPath = str(getenv("VIDEO_PATH"))
         otherPath = str(getenv("OTHER_PATH"))
 
-        cls.VIDEO_PATH = Path(videoPath)
-        cls.OTHER_PATH = Path(otherPath)
+        cls.setPath("VIDEO_PATH", Path(videoPath))
+        cls.setPath("OTHER_PATH", Path(otherPath))
 
         cls.__loaded = True
 
-
     @classmethod
     def validate(cls) -> None:
-        assert cls.__loaded
-
-        validatePath(cls.VIDEO_PATH)
-        validatePath(cls.OTHER_PATH)
+        validatePath(cls.paths["VIDEO_PATH"])
+        validatePath(cls.paths["OTHER_PATH"])
 
 
 def validateSession(config: Config) -> None:

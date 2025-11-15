@@ -1,5 +1,5 @@
 """
-processing_objects.py
+move_objects.py
 
 The objects of files that are meant to be processed and moved.
 """
@@ -23,18 +23,16 @@ class MoveObject(ABC):
     def __init__(self, file: str, location: str | Path):
         self.source = Path(file)
         self.saveLocation = Path(location)
-        self._validatePath(self.source)
-        self._build()
 
-    def _validatePath(self, path: Path):
-        if not path.exists():
-            raise ValueError(f"Path does not exist: {path}")
+    def validate(self):
+        if not self.source.exists():
+            raise ValueError(f"Path does not exist: {self.source}")
 
     def _sanitizeFilename(self, filename: str) -> str:
         return cleanFilename(filename)
 
     @abstractmethod
-    def _build(self): ...
+    def buildOptions(self): ...
 
     @abstractmethod
     def move(self): 
@@ -49,7 +47,7 @@ class MoveObject(ABC):
     def overwrite(self): ...
 
 
-videoOptions = {
+subDirectories = {
     0: ("Live", "live"),
     1: ("3D", "3d"),
     2: ("Animated", "animated"),
@@ -57,14 +55,22 @@ videoOptions = {
 
 class Video(MoveObject):
 
-    def _validatePath(self, path: Path):
-        super()._validatePath(path)
+    def validate(self):
+        super().validate()
 
-        if not path.is_file():
-            raise TypeError(f"Path is not a file: {path}")
+        if not self.source.is_file():
+            raise TypeError(f"Path is not a file: {self.source}")
 
 
-    def _build(self) -> None:
+    def _createDestination(
+        self,
+        subdirectory: str,
+        newName: str
+    ) -> None:
+        self.destination = self.saveLocation / subdirectory / newName
+
+
+    def buildOptions(self) -> None:
         oldName = self.source.stem
         newName = oldName
         ext = self.source.suffix
@@ -84,20 +90,20 @@ class Video(MoveObject):
         print()
 
         print("Categories:")
-        for key, value in videoOptions.items():
+        for key, value in subDirectories.items():
             print(f"{key}: {value[0]}")
         print()
 
         category = None
-        while category == None or category not in videoOptions.keys():
+        while category == None or category not in subDirectories.keys():
             try:
                 category = int(input("Choose category #: "))
             except ValueError:
                 category = None
         print()
 
-        subdirectory = videoOptions[category][1]
-        self.destination = self.saveLocation / subdirectory / finalName
+        subdirectory = subDirectories[category][1]
+        self._createDestination(subdirectory, finalName)
 
 
     def move(self) -> None:
@@ -126,7 +132,7 @@ class Video(MoveObject):
 
 class Other(MoveObject):
 
-    def _build(self) -> None:
+    def buildOptions(self) -> None:
         ...
 
 

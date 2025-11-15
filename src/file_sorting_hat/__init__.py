@@ -9,11 +9,11 @@ from sys import argv
 
 from fs_helpers import progressBar
 
-from .processing_factories import (
+from .move_factories import (
     MoveObjectSuperFactory,
     MoveObjectFactory
 )
-from .processing_objects import (
+from .move_objects import (
     MoveObject,
     MoveResult,
     MoveStatus,
@@ -31,10 +31,11 @@ def printTitle(title: str) -> None:
     print()
 
 
-def createObjects(args: list[str], config: Config) -> list[MoveObject]:
-    factory: MoveObjectFactory = \
-        MoveObjectSuperFactory(config).chooseFactory()
-
+def buildObjects(
+    args: list[str],
+    factory: MoveObjectFactory
+) -> list[MoveObject]:
+    
     totalJobs = len(args)
     currentJob = 0
     jobList: list[MoveObject] = []
@@ -46,6 +47,8 @@ def createObjects(args: list[str], config: Config) -> list[MoveObject]:
         try:
             print(f"Job {currentJob + 1}/{totalJobs}")
             file = factory.makeMoveObject(arg)
+            file.validate()
+            file.buildOptions()
             jobList.append(file)
         except (ValueError, TypeError) as e:
             print(e)
@@ -54,7 +57,7 @@ def createObjects(args: list[str], config: Config) -> list[MoveObject]:
             continue
         except KeyboardInterrupt:
             print()
-            print("Dropping remaing jobs.")
+            print("<!> Dropping remaing jobs.")
             print()
             break
         else:
@@ -189,7 +192,8 @@ def main() -> None:
 
     args = argv[1:]
     printTitle(f"Processing {len(args)} files")
-    jobList = createObjects(args, config)
+    factory = MoveObjectSuperFactory(config).chooseFactory()
+    jobList = buildObjects(args, factory)
 
     printTitle(f"Moving {len(jobList)} files")
     moveResults = moveFiles(jobList)
