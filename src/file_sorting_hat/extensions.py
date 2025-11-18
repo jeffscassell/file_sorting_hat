@@ -9,67 +9,67 @@ from os import getenv
 from pathlib import Path
 from sys import argv
 
-        
-
-__errorExists = None
-
-
-def setError(message: str) -> None:
-    global __errorExists
-    __errorExists = 1
-    print(message)
-
-
-def validatePath(path: Path) -> None:
-    if not path.exists():
-        setError(f"{path} does not exist.")
-
-    if not path.is_dir():
-        setError(f"{path} is not a directory")
 
 
 class Config:
     settings: dict[str, str]
     paths: dict[str, Path]
-    __loaded = False
+    isLoaded = False
 
 
     @classmethod
     def setSetting(cls, name: str, setting: str) -> None:
+        if not hasattr(cls, "settings"):
+            cls.settings = dict()
+
         cls.settings[name] = setting
     
     @classmethod
     def setPath(cls, name: str, path: Path) -> None:
+        if not hasattr(cls, "paths"):
+            cls.paths = dict()
+
         cls.paths[name] = path
 
     @classmethod
-    def load(cls) -> None:
-        """ Call once at startup to load environment variables. """
+    def load(cls, path: str | Path | None = None) -> None:
+        """ Call once at startup to load .env variables into environment. """
 
-        if cls.__loaded:
+        if cls.isLoaded:
             return
 
-        load_dotenv()
-        videoPath = str(getenv("VIDEO_PATH"))
-        otherPath = str(getenv("OTHER_PATH"))
-
-        cls.setPath("VIDEO_PATH", Path(videoPath))
-        cls.setPath("OTHER_PATH", Path(otherPath))
-
-        cls.__loaded = True
+        load_dotenv(path) if path else load_dotenv()
+        cls.isLoaded = True
 
     @classmethod
-    def validate(cls) -> None:
-        validatePath(cls.paths["VIDEO_PATH"])
-        validatePath(cls.paths["OTHER_PATH"])
+    def validatePath(cls, key: str, isFile: bool = False) -> None:
+        """ Confirm the key was loaded into the environment, validate it,
+        and add it into the config's paths store if so. """
+
+        path = getenv(key)
+
+        if not path:
+            raise ValueError(f"Could not find {key} in environment")
+        
+        path = Path(path)
+
+        if not path.exists():
+            raise OSError(f"{path} does not exist.")
+
+        if isFile:
+            if not path.is_file():
+                raise TypeError(f"{path} is not a file")
+        else:
+            if not path.is_dir():
+                raise TypeError(f"{path} is not a directory")
+
+        cls.setPath(key, Path(path))
 
 
 def validateSession(config: Config) -> None:
     if len(argv) == 1:
-        setError("This script requires file arguments to function.")
+        raise ValueError("This script requires file arguments to function.")
 
     config.load()
-    config.validate()
-
-    if __errorExists:
-        exit(1)
+    config.validatePath("VIDEO_PATH")
+    config.validatePath("OTHER_PATH")
