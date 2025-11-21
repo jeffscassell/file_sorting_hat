@@ -44,7 +44,7 @@ class Config:
     @classmethod
     def validatePath(cls, key: str, isFile: bool = False) -> None:
         """ Confirm the key was loaded into the environment, validate it,
-        and add it into the config's paths store if so. """
+        and add it into the config's `paths` store if so. """
 
         path = getenv(key)
 
@@ -66,10 +66,10 @@ class Config:
         cls.setPath(key, Path(path))
 
 
-def validateSession(config: Config) -> None:
+def validateSession() -> None:
     if len(argv) == 1:
         raise ValueError("This script requires file arguments to function.")
 
-    config.load()
-    config.validatePath("VIDEO_PATH")
-    config.validatePath("OTHER_PATH")
+    Config.load()
+    Config.validatePath("VIDEO_PATH")
+    Config.validatePath("OTHER_PATH")

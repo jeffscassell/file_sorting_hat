@@ -187,12 +187,11 @@ def fixErrors(
 
 
 def main() -> None:
-    config = Config()
-    validateSession(config)
+    validateSession()
 
     args = argv[1:]
     printTitle(f"Processing {len(args)} files")
-    factory = MoveObjectSuperFactory(config).chooseFactory()
+    factory = MoveObjectSuperFactory.chooseFactory()
     jobList = buildObjects(args, factory)
 
     printTitle(f"Moving {len(jobList)} files")

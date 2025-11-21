@@ -10,19 +10,19 @@ from enum import Enum
 from dataclasses import dataclass
 import shutil
 
-from fs_helpers import cleanFilename, confirmFilename, formatFileSize
+from fs_helpers import cleanFilename, confirmFilename, size
 
 
 
 class MoveObject(ABC):
     source: Path
     destination: Path
-    saveLocation: Path
+    directory: Path
 
 
-    def __init__(self, file: str, location: str | Path):
+    def __init__(self, file: str, directory: str | Path):
         self.source = Path(file)
-        self.saveLocation = Path(location)
+        self.directory = Path(directory)
 
     def validate(self):
         if not self.source.exists():
@@ -30,6 +30,12 @@ class MoveObject(ABC):
 
     def _sanitizeFilename(self, filename: str) -> str:
         return cleanFilename(filename)
+    
+    def setDestination(self, path: str | Path) -> None:
+        self.destination = Path(path)
+
+    def _destinationSafety(self) -> None:
+        ...
 
     @abstractmethod
     def buildOptions(self): ...
@@ -60,14 +66,6 @@ class Video(MoveObject):
 
         if not self.source.is_file():
             raise TypeError(f"Path is not a file: {self.source}")
-
-
-    def _createDestination(
-        self,
-        subdirectory: str,
-        newName: str
-    ) -> None:
-        self.destination = self.saveLocation / subdirectory / newName
 
 
     def buildOptions(self) -> None:
@@ -103,12 +101,13 @@ class Video(MoveObject):
         print()
 
         subdirectory = subDirectories[category][1]
-        self._createDestination(subdirectory, finalName)
+        destination = self.directory / subdirectory / finalName
+        self.setDestination(destination)
 
 
     def move(self) -> None:
-        if self.destination.exists():
-            raise FileExistsError
+        if self.destination.is_file():
+            raise FileExistsError(f"File exists: {self.destination}")
 
         shutil.move(self.source, self.destination)
 
@@ -119,15 +118,10 @@ class Video(MoveObject):
 
 
     def overwrite(self) -> None:
-        if self.source.exists()\
-            and self.destination.exists()\
-            and self.source != self.destination\
-        :
-            self.source.replace(self.destination)
-            # self.destination.unlink()
-            # with open(self.destination, "wb") as outfile:
-            #     outfile.write(self.source.read_bytes())
-            # self.source.unlink()
+        if self.destination.is_file():
+            self.destination.unlink()
+        
+        shutil.move(self.source, self.destination)
 
 
 class Other(MoveObject):
@@ -192,8 +186,8 @@ class MoveResult:
 
         match self.status:
             case MoveStatus.DUPLICATE:
-                source = formatFileSize(file=self.file.source)
-                destination = formatFileSize(file=self.file.destination)
+                source = size(self.file.source)
+                destination = size(self.file.destination)
                 string += f"\n\tsource: {source}, dest: {destination}"
             case MoveStatus.OTHER_ERROR:
                 string += f"\n\t{self.exception}"
