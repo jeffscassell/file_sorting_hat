@@ -89,7 +89,7 @@ def moveFiles(jobList: list[MoveObject]) -> list[MoveResult]:
             job.move()
             result = MoveResult(job, MoveStatus.SUCCESS)
             results.append(result)
-        except FileExistsError as e:
+        except (FileExistsError, IsADirectoryError) as e:
             result = MoveResult(job, MoveStatus.DUPLICATE, e)
             results.append(result)
         except OSError as e:
