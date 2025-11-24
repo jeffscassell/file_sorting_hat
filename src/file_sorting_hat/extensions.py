@@ -1,13 +1,12 @@
 """
 extensions.py
 
-Validation and config.
+Contains the Config object.
 """
 
 from dotenv import load_dotenv
 from os import getenv
 from pathlib import Path
-from sys import argv
 
 
 
@@ -64,12 +63,3 @@ class Config:
                 raise TypeError(f"{path} is not a directory")
 
         cls.setPath(key, Path(path))
-
-
-def validateSession() -> None:
-    if len(argv) == 1:
-        raise ValueError("This script requires file arguments to function.")
-
-    Config.load()
-    Config.validatePath("VIDEO_PATH")
-    Config.validatePath("OTHER_PATH")

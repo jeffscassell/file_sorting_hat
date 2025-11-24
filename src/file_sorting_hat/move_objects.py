@@ -9,8 +9,9 @@ from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
 import shutil
+from zipfile import ZipFile
 
-from fs_helpers import cleanFilename, confirmFilename, size
+from fs_helpers import cleanFilename, confirmFilename, size, unzip
 
 
 
@@ -20,22 +21,24 @@ class MoveObject(ABC):
     directory: Path
 
 
-    def __init__(self, file: str, directory: str | Path):
-        self.source = Path(file)
+    def __init__(self, source: str | Path, directory: str | Path):
+        self.source = Path(source)
         self.directory = Path(directory)
 
     def validate(self):
+        """ Make sure `source` at least exists on the filesystem. """
         if not self.source.exists():
-            raise ValueError(f"Path does not exist: {self.source}")
+            raise FileNotFoundError(f"Path does not exist: {self.source}")
 
     def _sanitizeFilename(self, filename: str) -> str:
         return cleanFilename(filename)
+
+    def _destinationSafety(self) -> None:
+        if not hasattr(self, "destination"):
+            raise ValueError("Missing destination")
     
     def setDestination(self, path: str | Path) -> None:
         self.destination = Path(path)
-
-    def _destinationSafety(self) -> None:
-        ...
 
     @abstractmethod
     def buildOptions(self): ...
@@ -43,15 +46,17 @@ class MoveObject(ABC):
     @abstractmethod
     def move(self): 
         """ Move object from source to destination. If destination exists,
-        raises OSError. """
+        raise FileExistsError. """
 
     @abstractmethod
     def delete(self):
-        """ Delete source file. """
+        """ Delete source file/directory, even if the directory is not
+        empty. """
 
     @abstractmethod
-    def overwrite(self): ...
-
+    def overwrite(self):
+        """ Move object from source to destination. If destination exists,
+        overwrite. """
 
 subDirectories = {
     0: ("Live", "live"),
@@ -105,19 +110,22 @@ class Video(MoveObject):
         self.setDestination(destination)
 
 
-    def move(self) -> None:
-        if self.destination.is_file():
-            raise FileExistsError(f"File exists: {self.destination}")
-
-        shutil.move(self.source, self.destination)
-
-
     def delete(self) -> None:
+        self.validate()
         if self.source.exists():
             self.source.unlink()
 
 
+    def move(self) -> None:
+        if self.destination.is_file():
+            raise FileExistsError(f"File exists: {self.destination}")
+
+        self.overwrite()
+
+
     def overwrite(self) -> None:
+        self.validate()
+        self._destinationSafety()
         if self.destination.is_file():
             self.destination.unlink()
         
@@ -125,21 +133,106 @@ class Video(MoveObject):
 
 
 class Other(MoveObject):
+    
+    unzippedDirectory: Path | None = None
+    
+    def validate(self) -> None:
+        super().validate()  # `source` at least exists.
+        
+        if not self.source.is_dir():
+            if not self.isZip():
+                raise TypeError(f"Path must be a directory or ZIP file: "
+                    f"{self.source}")
+    
+    def isZip(self) -> bool:
+        if self.source.is_file() and\
+            self.source.suffix == ".zip":
+                return True
+        return False
+        
+    def _tryUnzip(self) -> None:
+        if not self.isZip():
+            return
+
+        extracted: Path = self.source.parent / self.source.stem
+        if not extracted.is_dir():
+            unzip(self.source, extracted)
+        self.unzippedDirectory = extracted
+
+
+    def _cleanup(self) -> None:
+        """ Call after a `move()`/`overwrite()` operation to cleanup remnant
+        files/directories. """
+        if self.unzippedDirectory:
+            if self.unzippedDirectory.is_dir(): self.unzippedDirectory.rmdir()
+            if self.source.is_file(): self.source.unlink()
+        if self.source.is_dir(): self.source.rmdir()
+
 
     def buildOptions(self) -> None:
-        ...
+        oldName = newName = self.source.stem
+        ext = self.source.suffix
+        print(f"Current file: {oldName}{ext}")
+        print()
 
+        tag = input("Author tag (optional): ") or None
+        newName = input("Update name (optional): ") or newName
+        print()
 
-    def move(self) -> None:
-        ...
+        if tag:
+            newName = f"[{tag}] {newName}"
+
+        santizedName = self._sanitizeFilename(newName)
+        santizedName = confirmFilename(santizedName)
+        finalName = f"{santizedName}{ext}"
+        print()
+
+        destination = self.directory / finalName
+        self.setDestination(destination)
 
 
     def delete(self) -> None:
-        ...
+        self.validate()
+        if self.source.is_dir():
+            shutil.rmtree(self.source)
+        elif self.source.is_file():
+            self.source.unlink()
+        if self.unzippedDirectory:
+            if self.unzippedDirectory.is_dir():
+                shutil.rmtree(self.unzippedDirectory)
+
+
+    def move(self) -> None:
+        if self.destination.is_dir():
+            raise IsADirectoryError(f"Destination directory already exists: "
+                f"{self.destination}")
+
+        self.overwrite()
 
 
     def overwrite(self) -> None:
-        ...
+        self.validate()
+        self._destinationSafety()
+        self._tryUnzip()
+
+        if self.destination.is_dir():
+            shutil.rmtree(self.destination)
+
+        if self.unzippedDirectory:
+            sourceDirectory = self.unzippedDirectory
+        else:
+            sourceDirectory = self.source
+
+        # Source is already in the right place, but with the wrong name.
+        if sourceDirectory.parent == self.destination.parent:
+            shutil.move(self.source, self.destination.parent)
+            return
+
+        self.destination.mkdir()
+        for path in sourceDirectory.iterdir():
+            shutil.move(path, self.destination)
+
+        self._cleanup()
 
 
 class MoveStatus(Enum):

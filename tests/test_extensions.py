@@ -6,8 +6,8 @@ from file_sorting_hat.extensions import Config
 
 
 @pytest.fixture
-def config() -> Config:
-    file = Path(__file__).parent / "_resources" / "config"
+def config(resources: Path) -> Config:
+    file = resources / "config"
     config = Config()
     config.load(file)
     return config

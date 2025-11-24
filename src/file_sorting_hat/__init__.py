@@ -19,9 +19,18 @@ from .move_objects import (
     MoveStatus,
     recoverableErrors
 )
-from .extensions import validateSession, Config
+from .extensions import Config
 
 
+
+def validateSession(args: list[str]) -> None:
+    if len(args) == 1:
+        raise ValueError("This script requires file arguments to function.")
+
+    Config.load()
+    Config.validatePath("VIDEO_PATH")
+    Config.validatePath("OTHER_PATH")
+    
 
 def printTitle(title: str) -> None:
     length = len(title)
@@ -187,7 +196,7 @@ def fixErrors(
 
 
 def main() -> None:
-    validateSession()
+    validateSession(argv)
 
     args = argv[1:]
     printTitle(f"Processing {len(args)} files")
