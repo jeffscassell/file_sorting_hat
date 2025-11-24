@@ -267,6 +267,9 @@ class MoveResult:
         maxLength = 80
         prefix = self.file.destination.name
         suffix = self.status.value
+        
+        if len(prefix) > 50:
+            prefix = prefix[:45] + "(...)"
 
         if self.status in goodStates:
             fillChar = "."
