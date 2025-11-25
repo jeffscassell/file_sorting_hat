@@ -134,38 +134,29 @@ class Video(MoveObject):
 
 class Other(MoveObject):
     
-    unzippedDirectory: Path | None = None
-    
     def validate(self) -> None:
         super().validate()  # `source` at least exists.
         
         if not self.source.is_dir():
-            if not self.isZip():
+            if not self._isZip():
                 raise TypeError(f"Path must be a directory or ZIP file: "
                     f"{self.source}")
     
-    def isZip(self) -> bool:
+    def _isZip(self) -> bool:
         if self.source.is_file() and\
             self.source.suffix == ".zip":
                 return True
         return False
         
-    def _tryUnzip(self) -> None:
-        if not self.isZip():
-            return
-
-        extracted: Path = self.source.parent / self.source.stem
-        if not extracted.is_dir():
-            unzip(self.source, extracted)
-        self.unzippedDirectory = extracted
+    def _unzipTo(self, unzipDirectory: Path) -> None:
+        if not unzipDirectory.is_dir():
+            unzip(self.source, unzipDirectory)
 
 
     def _cleanup(self) -> None:
         """ Call after a `move()`/`overwrite()` operation to cleanup remnant
         files/directories. """
-        if self.unzippedDirectory:
-            if self.unzippedDirectory.is_dir(): self.unzippedDirectory.rmdir()
-            if self.source.is_file(): self.source.unlink()
+        if self.source.is_file(): self.source.unlink()
         if self.source.is_dir(): self.source.rmdir()
 
 
@@ -197,9 +188,6 @@ class Other(MoveObject):
             shutil.rmtree(self.source)
         elif self.source.is_file():
             self.source.unlink()
-        if self.unzippedDirectory:
-            if self.unzippedDirectory.is_dir():
-                shutil.rmtree(self.unzippedDirectory)
 
 
     def move(self) -> None:
@@ -213,24 +201,21 @@ class Other(MoveObject):
     def overwrite(self) -> None:
         self.validate()
         self._destinationSafety()
-        self._tryUnzip()
 
         if self.destination.is_dir():
             shutil.rmtree(self.destination)
-
-        if self.unzippedDirectory:
-            sourceDirectory = self.unzippedDirectory
+        
+        if self._isZip():
+            self._unzipTo(self.destination)
         else:
-            sourceDirectory = self.source
+            # Source is already in the right place, but with the wrong name.
+            if self.source.parent == self.destination.parent:
+                shutil.move(self.source, self.destination.parent)
+                return
 
-        # Source is already in the right place, but with the wrong name.
-        if sourceDirectory.parent == self.destination.parent:
-            shutil.move(self.source, self.destination.parent)
-            return
-
-        self.destination.mkdir()
-        for path in sourceDirectory.iterdir():
-            shutil.move(path, self.destination)
+            self.destination.mkdir()
+            for path in self.source.iterdir():
+                shutil.move(path, self.destination)
 
         self._cleanup()
 
