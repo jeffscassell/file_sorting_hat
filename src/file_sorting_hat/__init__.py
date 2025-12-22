@@ -46,7 +46,7 @@ def buildObjects(
 ) -> list[MoveObject]:
     
     totalJobs = len(args)
-    currentJob = 0
+    processedJobs = 0
     jobList: list[MoveObject] = []
 
     print("[NOTE] Stop in-taking files and begin processing with CTRL+C")
@@ -54,29 +54,29 @@ def buildObjects(
 
     for arg in args:
         try:
-            print(f"Job {currentJob + 1}/{totalJobs}")
+            print(f"Job {processedJobs + 1}/{totalJobs}")
             file = factory.makeMoveObject(arg)
             file.validate()
             file.buildOptions()
             jobList.append(file)
-        except (ValueError, TypeError) as e:
-            print(e)
-            print("Dropping job.")
-            print()
-            continue
         except KeyboardInterrupt:
             print()
             print("<!> Dropping remaing jobs.")
             print()
             break
-        else:
-            currentJob += 1
+        except BaseException as e:
+            print(e)
+            print("Dropping job.")
+            print()
+            continue
+        else:  # No errors occurred.
+            processedJobs += 1
         finally:
             print("~ " * 10)
             print()
 
-    print(f"Processed: {currentJob}/{totalJobs}")
-    print(f"Dropped: {totalJobs - currentJob}")
+    print(f"Processed: {processedJobs}/{totalJobs}")
+    print(f"Dropped: {totalJobs - processedJobs}")
     print()
     return jobList
 

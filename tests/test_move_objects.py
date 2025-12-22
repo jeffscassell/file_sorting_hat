@@ -4,7 +4,7 @@ import shutil
 
 from fs_helpers import zipDirectory
 
-from file_sorting_hat.move_objects import Video, Other
+from file_sorting_hat.move_objects import Video, Other, MoveObject
 
 
 
@@ -15,6 +15,35 @@ def sourceDir(resources: Path):
 @pytest.fixture
 def destDir(resources: Path):
     return resources / "move_objects" / "dest_dir"
+
+
+class TestClassMethods:
+    def testTagExtraction(self):
+        assert MoveObject._extractTag("[one_tag]_name") == \
+            "one_tag"
+        assert MoveObject._extractTag("[one tag] name") == \
+            "one_tag"
+        assert MoveObject._extractTag("name") == \
+            None
+        assert MoveObject._extractTag("[one_tag,two_tag] name") == \
+            "one_tag,two_tag"
+        assert MoveObject._extractTag("[one tag, two tag] name") == \
+            "one_tag,two_tag"
+        assert MoveObject._extractTag("[one_tag, two_tag] name") == \
+            "one_tag,two_tag"
+    
+    def testNameExtraction(self):
+        assert MoveObject._extractName("[one_tag]_name") == \
+            "name"
+        assert MoveObject._extractName("[one tag] name") == \
+            "name"
+        assert MoveObject._extractName("[one tag]-name") == \
+            "name"
+        assert MoveObject._extractName("name") == \
+            "name"
+
+        with pytest.raises(ValueError):
+            MoveObject._extractName("[one_tag]")
 
 
 class TestVideo:

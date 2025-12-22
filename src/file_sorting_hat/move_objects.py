@@ -8,10 +8,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
+import re
 import shutil
-from zipfile import ZipFile
 
-from fs_helpers import cleanFilename, confirmFilename, size, unzip
+from fs_helpers import cleanFilename, confirm, size, unzip
 
 
 
@@ -19,6 +19,11 @@ class MoveObject(ABC):
     source: Path
     destination: Path
     directory: Path
+    
+    # sample name: [tag]_name_of_file
+    # tag: Match.group(2)
+    # name_of_file: Match.group(3)
+    PATTERN = re.compile(r"(\[(.*)\][_ -]?)?(.*)")
 
 
     def __init__(self, source: str | Path, directory: str | Path):
@@ -30,7 +35,8 @@ class MoveObject(ABC):
         if not self.source.exists():
             raise FileNotFoundError(f"Path does not exist: {self.source}")
 
-    def _sanitizeFilename(self, filename: str) -> str:
+    @classmethod
+    def _sanitizeFilename(cls, filename: str) -> str:
         return cleanFilename(filename)
 
     def _destinationSafety(self) -> None:
@@ -39,6 +45,35 @@ class MoveObject(ABC):
     
     def setDestination(self, path: str | Path) -> None:
         self.destination = Path(path)
+
+    @classmethod
+    def _extractTag(cls, string: str) -> str | None:
+        """ Extracts and returns only the contents of the tag, correcting for
+        any erroneous spaces within. """
+        matched = re.search(cls.PATTERN, string)
+        if matched:
+            tags = matched.group(2)
+            
+            # Fix any erroneous spaces within tag(s).
+            # [some space, in_tags] -> [some_space,in_tags]
+            if tags:
+                tags = tags.split(",")
+                fixedTags = []
+                for tag in tags:
+                    tag = tag.split()
+                    fixedTags.append("_".join(tag))
+                return ",".join(fixedTags)
+        return None
+
+    @classmethod
+    def _extractName(cls, string: str) -> str:
+        """ Extracts and returns only the name of the file, excluding any
+        tags or extra whitespace/word separators. """
+        matched = re.search(cls.PATTERN, string)
+        if not matched or not matched.group(3):
+            raise ValueError(f"Could not extract name from: {string}")
+        
+        return matched.group(3)
 
     @abstractmethod
     def buildOptions(self): ...
@@ -74,23 +109,27 @@ class Video(MoveObject):
 
 
     def buildOptions(self) -> None:
-        oldName = self.source.stem
-        newName = oldName
+        oldFullName = self.source.stem
         ext = self.source.suffix
-        print(f"Current file: {oldName}{ext}")
+        oldTag = self._extractTag(oldFullName)
+        oldName = self._extractName(oldFullName)
+        print(f"Current file: {oldFullName}{ext}")
         print()
 
-        tag = input("Author tag (optional): ") or None
-        newName = input("Update name (optional): ") or newName
-        print()
+        while True:
+            newTag = input("Author tag (optional): ") or oldTag
+            newName = input("Update name (optional): ") or oldName
+            print()
 
-        if tag:
-            newName = f"[{tag}] {newName}"
+            if newTag:
+                newName = f"[{newTag}] {newName}"
 
-        santizedName = self._sanitizeFilename(newName)
-        santizedName = confirmFilename(santizedName)
-        finalName = f"{santizedName}{ext}"
-        print()
+            santizedName = self._sanitizeFilename(newName)
+            if confirm(santizedName, "Proposed file name"):
+                finalName = f"{santizedName}{ext}"
+                print()
+                break
+            print()
 
         print("Categories:")
         for key, value in subDirectories.items():
@@ -161,22 +200,27 @@ class Other(MoveObject):
 
 
     def buildOptions(self) -> None:
-        oldName = newName = self.source.stem
+        oldFullName = self.source.stem
         ext = self.source.suffix
-        print(f"Current file: {oldName}{ext}")
+        oldTag = self._extractTag(oldFullName)
+        oldName = self._extractName(oldFullName)
+        print(f"Current file: {oldFullName}{ext}")
         print()
 
-        tag = input("Author tag (optional): ") or None
-        newName = input("Update name (optional): ") or newName
-        print()
+        while True:
+            newTag = input("Author tag (optional): ") or oldTag
+            newName = input("Update name (optional): ") or oldName
+            print()
 
-        if tag:
-            newName = f"[{tag}] {newName}"
+            if newTag:
+                newName = f"[{newTag}] {newName}"
 
-        santizedName = self._sanitizeFilename(newName)
-        santizedName = confirmFilename(santizedName)
-        finalName = f"{santizedName}{ext}"
-        print()
+            santizedName = self._sanitizeFilename(newName)
+            if confirm(santizedName, "Proposed file name"):
+                finalName = f"{santizedName}{ext}"
+                print()
+                break
+            print()
 
         destination = self.directory / finalName
         self.setDestination(destination)
