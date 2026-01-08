@@ -18,6 +18,7 @@ def destDir(resources: Path):
 
 
 class TestClassMethods:
+
     def testTagExtraction(self):
         assert MoveObject._extractTag("[one_tag]_name") == \
             "one_tag"
@@ -31,7 +32,7 @@ class TestClassMethods:
             "one_tag,two_tag"
         assert MoveObject._extractTag("[one_tag, two_tag] name") == \
             "one_tag,two_tag"
-    
+
     def testNameExtraction(self):
         assert MoveObject._extractName("[one_tag]_name") == \
             "name"

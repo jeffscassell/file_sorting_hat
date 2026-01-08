@@ -125,7 +125,7 @@ class Video(MoveObject):
                 newName = f"[{newTag}] {newName}"
 
             santizedName = self._sanitizeFilename(newName)
-            if confirm(santizedName, "Proposed file name"):
+            if confirm(f"Proposed file name: {santizedName}"):
                 finalName = f"{santizedName}{ext}"
                 print()
                 break
@@ -216,7 +216,7 @@ class Other(MoveObject):
                 newName = f"[{newTag}] {newName}"
 
             santizedName = self._sanitizeFilename(newName)
-            if confirm(santizedName, "Proposed file name"):
+            if confirm(f"Proposed file name: {santizedName}"):
                 finalName = f"{santizedName}{ext}"
                 print()
                 break
