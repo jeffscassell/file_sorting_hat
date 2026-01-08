@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import re
 import shutil
 
-from fs_helpers import cleanFilename, confirm, size, unzip
+from fs_helpers import cleanFilename, confirm, sizei, unzip
 
 
 
@@ -311,8 +311,8 @@ class MoveResult:
 
         match self.status:
             case MoveStatus.DUPLICATE:
-                source = size(self.file.source)
-                destination = size(self.file.destination)
+                source = sizei(self.file.source)
+                destination = sizei(self.file.destination)
                 string += f"\n\tsource: {source}, dest: {destination}"
             case MoveStatus.OTHER_ERROR:
                 string += f"\n\t{self.exception}"
