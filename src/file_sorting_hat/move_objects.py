@@ -53,7 +53,7 @@ class MoveObject(ABC):
         matched = re.search(cls.PATTERN, string)
         if matched:
             tags = matched.group(2)
-            
+
             # Fix any erroneous spaces within tag(s).
             # [some space, in_tags] -> [some_space,in_tags]
             if tags:
@@ -66,7 +66,7 @@ class MoveObject(ABC):
         return None
 
     @classmethod
-    def _extractName(cls, string: str) -> str:
+    def _extractTitle(cls, string: str) -> str:
         """ Extracts and returns only the name of the file, excluding any
         tags or extra whitespace/word separators. """
         matched = re.search(cls.PATTERN, string)
@@ -74,9 +74,39 @@ class MoveObject(ABC):
             raise ValueError(f"Could not extract name from: {string}")
         
         return matched.group(3)
+    
+    @classmethod
+    def _createName(cls, file: Path) -> str:
+        oldFullName = file.stem
+        ext = file.suffix
+        oldTag = cls._extractTag(oldFullName)
+        oldTitle = cls._extractTitle(oldFullName)
+        name = ""
+        print(f"Current file: {oldFullName}{ext}")
+        print()
+        
+        while True:
+            newTag = input("Author tag (optional -- s to skip): ") or oldTag
+
+            if newTag == "s":
+                raise BaseException
+
+            newTitle = input("Update name (optional): ") or oldTitle
+            print()
+
+            if newTag:
+                newTag = cls._extractTag(f"[{newTag}]")
+                name = f"[{newTag}] {newTitle}"
+
+            santizedName = cls._sanitizeFilename(name)
+            if confirm(f"Proposed file name: {santizedName}"):
+                finalName = f"{santizedName}{ext}"
+                print()
+                return finalName
+            print()
 
     @abstractmethod
-    def buildOptions(self): ...
+    def processObject(self): ...
 
     @abstractmethod
     def move(self): 
@@ -93,11 +123,13 @@ class MoveObject(ABC):
         """ Move object from source to destination. If destination exists,
         overwrite. """
 
+
 subDirectories = {
     0: ("Live", "live"),
     1: ("3D", "3d"),
     2: ("Animated", "animated"),
 }
+
 
 class Video(MoveObject):
 
@@ -108,28 +140,8 @@ class Video(MoveObject):
             raise TypeError(f"Path is not a file: {self.source}")
 
 
-    def buildOptions(self) -> None:
-        oldFullName = self.source.stem
-        ext = self.source.suffix
-        oldTag = self._extractTag(oldFullName)
-        oldName = self._extractName(oldFullName)
-        print(f"Current file: {oldFullName}{ext}")
-        print()
-
-        while True:
-            newTag = input("Author tag (optional): ") or oldTag
-            newName = input("Update name (optional): ") or oldName
-            print()
-
-            if newTag:
-                newName = f"[{newTag}] {newName}"
-
-            santizedName = self._sanitizeFilename(newName)
-            if confirm(f"Proposed file name: {santizedName}"):
-                finalName = f"{santizedName}{ext}"
-                print()
-                break
-            print()
+    def processObject(self) -> None:
+        finalName = self._createName(self.source)
 
         print("Categories:")
         for key, value in subDirectories.items():
@@ -199,28 +211,8 @@ class Other(MoveObject):
         if self.source.is_dir(): self.source.rmdir()
 
 
-    def buildOptions(self) -> None:
-        oldFullName = self.source.stem
-        ext = self.source.suffix
-        oldTag = self._extractTag(oldFullName)
-        oldName = self._extractName(oldFullName)
-        print(f"Current file: {oldFullName}{ext}")
-        print()
-
-        while True:
-            newTag = input("Author tag (optional): ") or oldTag
-            newName = input("Update name (optional): ") or oldName
-            print()
-
-            if newTag:
-                newName = f"[{newTag}] {newName}"
-
-            santizedName = self._sanitizeFilename(newName)
-            if confirm(f"Proposed file name: {santizedName}"):
-                finalName = f"{santizedName}{ext}"
-                print()
-                break
-            print()
+    def processObject(self) -> None:
+        finalName = self._createName(self.source)
 
         destination = self.directory / finalName
         self.setDestination(destination)

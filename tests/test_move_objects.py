@@ -34,17 +34,17 @@ class TestClassMethods:
             "one_tag,two_tag"
 
     def testNameExtraction(self):
-        assert MoveObject._extractName("[one_tag]_name") == \
+        assert MoveObject._extractTitle("[one_tag]_name") == \
             "name"
-        assert MoveObject._extractName("[one tag] name") == \
+        assert MoveObject._extractTitle("[one tag] name") == \
             "name"
-        assert MoveObject._extractName("[one tag]-name") == \
+        assert MoveObject._extractTitle("[one tag]-name") == \
             "name"
-        assert MoveObject._extractName("name") == \
+        assert MoveObject._extractTitle("name") == \
             "name"
 
         with pytest.raises(ValueError):
-            MoveObject._extractName("[one_tag]")
+            MoveObject._extractTitle("[one_tag]")
 
 
 class TestVideo:

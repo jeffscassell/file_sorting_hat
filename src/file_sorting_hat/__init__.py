@@ -44,7 +44,7 @@ def buildObjects(
     args: list[str],
     factory: MoveObjectFactory
 ) -> list[MoveObject]:
-    
+
     totalJobs = len(args)
     processedJobs = 0
     jobList: list[MoveObject] = []
@@ -57,7 +57,7 @@ def buildObjects(
             print(f"Job {processedJobs + 1}/{totalJobs}")
             file = factory.makeMoveObject(arg)
             file.validate()
-            file.buildOptions()
+            file.processObject()
             jobList.append(file)
         except KeyboardInterrupt:
             print()
