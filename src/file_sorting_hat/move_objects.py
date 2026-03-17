@@ -16,313 +16,324 @@ from fs_helpers import cleanFilename, confirm, sizei, unzip
 
 
 class MoveObject(ABC):
-    source: Path
-    destination: Path
-    directory: Path
-    
-    # sample name: [tag]_name_of_file
-    # tag: Match.group(2)
-    # name_of_file: Match.group(3)
-    PATTERN = re.compile(r"(\[(.*)\][_ -]?)?(.*)")
+   source: Path
+   destination: Path
+   directory: Path
+   
+   # sample name: [tag]_name_of_file
+   # tag: Match.group(2)
+   # name_of_file: Match.group(3)
+   PATTERN = re.compile(r"(\[(.*?)\][_ -]?)?(.*)")
 
 
-    def __init__(self, source: str | Path, directory: str | Path):
-        self.source = Path(source)
-        self.directory = Path(directory)
+   def __init__(self, source: str | Path, directory: str | Path):
+      self.source = Path(source)
+      self.directory = Path(directory)
 
-    def validate(self):
-        """ Make sure `source` at least exists on the filesystem. """
-        if not self.source.exists():
-            raise FileNotFoundError(f"Path does not exist: {self.source}")
+   def validate(self):
+      """ Make sure `source` at least exists on the filesystem. """
+      if not self.source.exists():
+         raise FileNotFoundError(f"Path does not exist: {self.source}")
 
-    @classmethod
-    def _sanitizeFilename(cls, filename: str) -> str:
-        return cleanFilename(filename)
+   @classmethod
+   def _sanitizeFilename(cls, filename: str) -> str:
+      return cleanFilename(filename)
 
-    def _destinationSafety(self) -> None:
-        if not hasattr(self, "destination"):
-            raise ValueError("Missing destination")
-    
-    def setDestination(self, path: str | Path) -> None:
-        self.destination = Path(path)
+   def _destinationSafety(self) -> None:
+      if not hasattr(self, "destination"):
+         raise ValueError("Missing destination")
+   
+   def setDestination(self, path: str | Path) -> None:
+      self.destination = Path(path)
 
-    @classmethod
-    def _extractTag(cls, string: str) -> str | None:
-        """ Extracts and returns only the contents of the tag, correcting for
-        any erroneous spaces within. """
-        matched = re.search(cls.PATTERN, string)
-        if matched:
-            tags = matched.group(2)
+   @classmethod
+   def _extractTag(cls, string: str) -> str:
+      """ Extracts and returns only the contents of the tag, correcting for
+      any erroneous spaces within. """
+      matched = re.search(cls.PATTERN, string)
+      if matched:
+         tags = matched.group(2)
 
-            # Fix any erroneous spaces within tag(s).
-            # [some space, in_tags] -> [some_space,in_tags]
-            if tags:
-                tags = tags.split(",")
-                fixedTags = []
-                for tag in tags:
-                    tag = tag.split()
-                    fixedTags.append("_".join(tag))
-                return ",".join(fixedTags)
-        return None
+         # Fix any erroneous spaces within tag(s).
+         # [some space, in_tags] -> [some_space,in_tags]
+         if tags:
+               tags = tags.split(",")
+               fixedTags = []
+               for tag in tags:
+                  tag = tag.split()
+                  fixedTags.append("_".join(tag))
+               return ",".join(fixedTags)
+      return ""
 
-    @classmethod
-    def _extractTitle(cls, string: str) -> str:
-        """ Extracts and returns only the name of the file, excluding any
-        tags or extra whitespace/word separators. """
-        matched = re.search(cls.PATTERN, string)
-        if not matched or not matched.group(3):
-            raise ValueError(f"Could not extract name from: {string}")
-        
-        return matched.group(3)
-    
-    @classmethod
-    def _createName(cls, file: Path) -> str:
-        oldFullName = file.stem
-        ext = file.suffix
-        oldTag = cls._extractTag(oldFullName)
-        oldTitle = cls._extractTitle(oldFullName)
-        name = ""
-        print(f"Current file: {oldFullName}{ext}")
-        print()
-        
-        while True:
-            newTag = input("Author tag (optional -- s to skip): ") or oldTag
+   @classmethod
+   def _extractTitle(cls, string: str) -> str:
+      """ Extracts and returns only the name of the file, excluding any
+      tags or extra whitespace/word separators. """
+      matched = re.search(cls.PATTERN, string)
+      if not matched or not matched.group(3):
+         return ""
 
-            if newTag == "s":
-                raise BaseException
+      return matched.group(3)
 
-            newTitle = input("Update name (optional): ") or oldTitle
-            print()
+   @classmethod
+   def _createName(cls, file: Path) -> str:
+      oldFullName = file.stem
+      ext = file.suffix
+      oldTag = cls._extractTag(oldFullName)
+      oldTitle = cls._extractTitle(oldFullName)
+      name = ""
+      
+      if not oldTag and not oldTitle:
+         raise ValueError(f"Error parsing any tag/title from file: {file}")
+      
+      print(f"Current file: {oldFullName}{ext}")
+      print()
 
-            if newTag:
-                newTag = cls._extractTag(f"[{newTag}]")
-                name = f"[{newTag}] {newTitle}"
+      while True:
+         newTag = input("Author tag (optional -- s to skip file): ") or oldTag
 
-            santizedName = cls._sanitizeFilename(name)
-            if confirm(f"Proposed file name: {santizedName}"):
-                finalName = f"{santizedName}{ext}"
-                print()
-                return finalName
-            print()
+         if newTag == "s":
+               raise BaseException
+         if newTag == "-":
+               newTag = None
 
-    @abstractmethod
-    def processObject(self): ...
+         newTitle = input("Update name (optional): ") or oldTitle
+         print()
 
-    @abstractmethod
-    def move(self): 
-        """ Move object from source to destination. If destination exists,
-        raise FileExistsError. """
+         if newTag:
+               newTag = cls._extractTag(f"[{newTag}]")
+               name = f"[{newTag}]"
 
-    @abstractmethod
-    def delete(self):
-        """ Delete source file/directory, even if the directory is not
-        empty. """
+         if newTitle:
+               if newTag:
+                  name += " "
+               name += newTitle
 
-    @abstractmethod
-    def overwrite(self):
-        """ Move object from source to destination. If destination exists,
-        overwrite. """
+         santizedName = cls._sanitizeFilename(name)
+         if confirm(f"Proposed file name: {santizedName}"):
+               finalName = f"{santizedName}{ext}"
+               print()
+               return finalName
+         print()
+
+   @abstractmethod
+   def processObject(self): ...
+
+   @abstractmethod
+   def move(self): 
+      """ Move object from source to destination. If destination exists,
+      raise FileExistsError. """
+
+   @abstractmethod
+   def delete(self):
+      """ Delete source file/directory, even if the directory is not
+      empty. """
+
+   @abstractmethod
+   def overwrite(self):
+      """ Move object from source to destination. If destination exists,
+      overwrite. """
 
 
 subDirectories = {
-    0: ("Live", "live"),
-    1: ("3D", "3d"),
-    2: ("Animated", "animated"),
+   0: ("Live", "live"),
+   1: ("3D", "3d"),
+   2: ("Animated", "animated"),
 }
 
 
 class Video(MoveObject):
 
-    def validate(self):
-        super().validate()
+   def validate(self):
+      super().validate()
 
-        if not self.source.is_file():
-            raise TypeError(f"Path is not a file: {self.source}")
-
-
-    def processObject(self) -> None:
-        finalName = self._createName(self.source)
-
-        print("Categories:")
-        for key, value in subDirectories.items():
-            print(f"{key}: {value[0]}")
-        print()
-
-        category = None
-        while category == None or category not in subDirectories.keys():
-            try:
-                category = int(input("Choose category #: "))
-            except ValueError:
-                category = None
-        print()
-
-        subdirectory = subDirectories[category][1]
-        destination = self.directory / subdirectory / finalName
-        self.setDestination(destination)
+      if not self.source.is_file():
+         raise TypeError(f"Path is not a file: {self.source}")
 
 
-    def delete(self) -> None:
-        self.validate()
-        if self.source.exists():
-            self.source.unlink()
+   def processObject(self) -> None:
+      finalName = self._createName(self.source)
+
+      print("Categories:")
+      for key, value in subDirectories.items():
+         print(f"{key}: {value[0]}")
+      print()
+
+      category = None
+      while category == None or category not in subDirectories.keys():
+         try:
+               category = int(input("Choose category #: "))
+         except ValueError:
+               category = None
+      print()
+
+      subdirectory = subDirectories[category][1]
+      destination = self.directory / subdirectory / finalName
+      self.setDestination(destination)
 
 
-    def move(self) -> None:
-        if self.destination.is_file():
-            raise FileExistsError(f"File exists: {self.destination}")
+   def delete(self) -> None:
+      self.validate()
+      if self.source.exists():
+         self.source.unlink()
 
-        self.overwrite()
+
+   def move(self) -> None:
+      if self.destination.is_file():
+         raise FileExistsError(f"File exists: {self.destination}")
+
+      self.overwrite()
 
 
-    def overwrite(self) -> None:
-        self.validate()
-        self._destinationSafety()
-        if self.destination.is_file():
-            self.destination.unlink()
-        
-        shutil.move(self.source, self.destination)
+   def overwrite(self) -> None:
+      self.validate()
+      self._destinationSafety()
+      if self.destination.is_file():
+         self.destination.unlink()
+      
+      shutil.move(self.source, self.destination)
 
 
 class Other(MoveObject):
-    
-    def validate(self) -> None:
-        super().validate()  # `source` at least exists.
-        
-        if not self.source.is_dir():
-            if not self._isZip():
-                raise TypeError(f"Path must be a directory or ZIP file: "
-                    f"{self.source}")
-    
-    def _isZip(self) -> bool:
-        if self.source.is_file() and\
-            self.source.suffix == ".zip":
-                return True
-        return False
-        
-    def _unzipTo(self, unzipDirectory: Path) -> None:
-        if not unzipDirectory.is_dir():
-            unzip(self.source, unzipDirectory)
+   
+   def validate(self) -> None:
+      super().validate()  # `source` at least exists.
+
+      if not self.source.is_dir():
+         if not self._isZip():
+               raise TypeError(f"Path must be a directory or ZIP file: "
+                  f"{self.source}")
+
+   def _isZip(self) -> bool:
+      if self.source.is_file() and\
+         self.source.suffix == ".zip":
+               return True
+      return False
+
+   def _unzipTo(self, unzipDirectory: Path) -> None:
+      unzip(self.source, unzipDirectory)
 
 
-    def _cleanup(self) -> None:
-        """ Call after a `move()`/`overwrite()` operation to cleanup remnant
-        files/directories. """
-        if self.source.is_file(): self.source.unlink()
-        if self.source.is_dir(): self.source.rmdir()
+   def _cleanup(self) -> None:
+      """ Call after a `move()`/`overwrite()` operation to cleanup remnant
+      files/directories. """
+      if self.source.is_file(): self.source.unlink()
+      if self.source.is_dir(): self.source.rmdir()
 
 
-    def processObject(self) -> None:
-        finalName = self._createName(self.source)
+   def processObject(self) -> None:
+      finalName = self._createName(self.source)
+      finalName = Path(finalName).stem
 
-        destination = self.directory / finalName
-        self.setDestination(destination)
-
-
-    def delete(self) -> None:
-        self.validate()
-        if self.source.is_dir():
-            shutil.rmtree(self.source)
-        elif self.source.is_file():
-            self.source.unlink()
+      destination = self.directory / finalName
+      self.setDestination(destination)
 
 
-    def move(self) -> None:
-        if self.destination.is_dir():
-            raise IsADirectoryError(f"Destination directory already exists: "
-                f"{self.destination}")
+   def delete(self) -> None:
+      self.validate()
+      if self.source.is_dir():
+         shutil.rmtree(self.source)
+      elif self.source.is_file():
+         self.source.unlink()
 
-        self.overwrite()
+
+   def move(self) -> None:
+      if self.destination.is_dir():
+         raise IsADirectoryError(f"Destination directory already exists: "
+               f"{self.destination}")
+
+      self.overwrite()
 
 
-    def overwrite(self) -> None:
-        self.validate()
-        self._destinationSafety()
+   def overwrite(self) -> None:
+      self.validate()
+      self._destinationSafety()
 
-        if self.destination.is_dir():
-            shutil.rmtree(self.destination)
-        
-        if self._isZip():
-            self._unzipTo(self.destination)
-        else:
-            # Source is already in the right place, but with the wrong name.
-            if self.source.parent == self.destination.parent:
-                shutil.move(self.source, self.destination.parent)
-                return
+      if self.destination.is_dir():
+         shutil.rmtree(self.destination)
+      
+      if self._isZip():
+         self._unzipTo(self.destination)
+      else:
+         # Source is already in the right place, but with the wrong name.
+         if self.source.parent == self.destination.parent:
+               shutil.move(self.source, self.destination.parent)
+               return
 
-            self.destination.mkdir()
-            for path in self.source.iterdir():
-                shutil.move(path, self.destination)
+         self.destination.mkdir()
+         for path in self.source.iterdir():
+               shutil.move(path, self.destination)
 
-        self._cleanup()
+      self._cleanup()
 
 
 class MoveStatus(Enum):
-    SUCCESS = "moved"
-    DUPLICATE = "destination exists"
-    DELETE_FAILURE = "can't delete source"
-    OTHER_ERROR = "error"
-    DELETED = "deleted source"
-    OVERWRITTEN = "overwritten"
-    PROCESSED = "processed"
+   SUCCESS = "moved"
+   DUPLICATE = "destination exists"
+   DELETE_FAILURE = "can't delete source"
+   OTHER_ERROR = "error"
+   DELETED = "deleted source"
+   OVERWRITTEN = "overwritten"
+   PROCESSED = "processed"
 
 
 recoverableErrors = (
-    MoveStatus.DUPLICATE,
-    MoveStatus.DELETE_FAILURE,
+   MoveStatus.DUPLICATE,
+   MoveStatus.DELETE_FAILURE,
 )
 
 goodStates = (
-    MoveStatus.SUCCESS,
-    MoveStatus.DELETED,
-    MoveStatus.OVERWRITTEN,
+   MoveStatus.SUCCESS,
+   MoveStatus.DELETED,
+   MoveStatus.OVERWRITTEN,
 )
 
 
 @dataclass
 class MoveResult:
-    file: MoveObject
-    status: MoveStatus
-    exception: BaseException | None = None
+   file: MoveObject
+   status: MoveStatus
+   exception: BaseException | None = None
 
-    def __str__(self) -> str:
-        maxLength = 80
-        prefix = self.file.destination.name
-        suffix = self.status.value
-        
-        if len(prefix) > 50:
-            prefix = prefix[:45] + "(...)"
+   def __str__(self) -> str:
+      maxLength = 80
+      prefix = self.file.destination.name
+      suffix = self.status.value
+      
+      if len(prefix) > 50:
+         prefix = prefix[:45] + "(...)"
 
-        if self.status in goodStates:
-            fillChar = "."
-        else:
-            fillChar = "_"
+      if self.status in goodStates:
+         fillChar = "."
+      else:
+         fillChar = "_"
 
-        filledLength = len(prefix) + len(suffix)
-        emptyLength = maxLength - filledLength
-        string = prefix + fillChar * emptyLength + suffix
+      filledLength = len(prefix) + len(suffix)
+      emptyLength = maxLength - filledLength
+      string = prefix + fillChar * emptyLength + suffix
 
-        match self.status:
-            case MoveStatus.DUPLICATE:
-                source = sizei(self.file.source)
-                destination = sizei(self.file.destination)
-                string += f"\n\tsource: {source}, dest: {destination}"
-            case MoveStatus.OTHER_ERROR:
-                string += f"\n\t{self.exception}"
+      match self.status:
+         case MoveStatus.DUPLICATE:
+               source = sizei(self.file.source)
+               destination = sizei(self.file.destination)
+               string += f"\n\tsource: {source}, dest: {destination}"
+         case MoveStatus.OTHER_ERROR:
+               string += f"\n\t{self.exception}"
 
-        return string
+      return string
 
-    def delete(self) -> None:
-        self.file.delete()
-        self.__clear(MoveStatus.DELETED)
+   def delete(self) -> None:
+      self.file.delete()
+      self.__clear(MoveStatus.DELETED)
 
-    def overwrite(self) -> None:
-        self.file.overwrite()
-        self.__clear(MoveStatus.OVERWRITTEN)
+   def overwrite(self) -> None:
+      self.file.overwrite()
+      self.__clear(MoveStatus.OVERWRITTEN)
 
-    def move(self) -> None:
-        self.file.move()
-        self.__clear(MoveStatus.SUCCESS)
+   def move(self) -> None:
+      self.file.move()
+      self.__clear(MoveStatus.SUCCESS)
 
-    def __clear(self, status: MoveStatus) -> None:
-        self.status = status
-        self.exception = None
+   def __clear(self, status: MoveStatus) -> None:
+      self.status = status
+      self.exception = None
