@@ -47,9 +47,12 @@ def buildObjects(
 
     totalJobs = len(args)
     processedJobs = 0
+    DEMARCATION = "~ " * 10
     jobList: list[MoveObject] = []
 
-    print("[NOTE] Stop in-taking files and begin processing with CTRL+C")
+    print("[NOTE] Stop in-taking early and begin processing with CTRL+C")
+    print()
+    print(DEMARCATION)
     print()
 
     for arg in args:
@@ -70,14 +73,12 @@ def buildObjects(
             print()
             continue
         else:  # No errors occurred.
-            processedJobs += 1
+            ...
         finally:
-            print("~ " * 10)
+            processedJobs += 1
+            print(DEMARCATION)
             print()
 
-    print(f"Processed: {processedJobs}/{totalJobs}")
-    print(f"Dropped: {totalJobs - processedJobs}")
-    print()
     return jobList
 
 
@@ -203,6 +204,10 @@ def main() -> None:
     factory = MoveObjectSuperFactory.chooseFactory()
     jobList = buildObjects(args, factory)
 
+    if not jobList:
+        print("No files to process. Exiting.")
+        return
+
     printTitle(f"Moving {len(jobList)} files")
     moveResults = moveFiles(jobList)
     reportResults(moveResults)
@@ -221,10 +226,11 @@ def main() -> None:
                 policies = getPolicies()
 
             # Return early if we don't need to do any work.
-            # The policy is given 1 pair at instantiation, which means if it still
-            # only has 1, it's empty.
+            # The policy is given 1 pair at instantiation, which means if it
+            # still only has 1, it's empty.
             if len(policies) == 1:
-                print("The selected policies indicate that no fixes are needed.")
+                print("The selected policies indicate that no fixes "
+                    "are needed.")
                 update = ""
                 while update not in ("y", "n"):
                     update = input("Update policies? [y/N]").lower() or "n"
